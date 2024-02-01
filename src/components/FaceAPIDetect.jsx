@@ -101,8 +101,8 @@ const FaceAPIDetect = () => {
         } else {
           // Handle the case when no face is detected
           setDescriptionUser({
-            age: 0,
-            gender: "",
+            age: "Attente de détection...",
+            gender: "Attente de détection...",
           });
 
           // Reset ageHistory and start a new 3-second window
