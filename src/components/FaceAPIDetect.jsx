@@ -1,10 +1,13 @@
-// import * as faceapi from "face-api.js";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const FaceAPIDetect = () => {
   const videoRef = useRef(null);
-  const [descriptionUser, setDescriptionUser] = useState("");
+  const [descriptionUser, setDescriptionUser] = useState({
+    age: 0,
+    gender: "",
+  });
+  const [ageHistory, setAgeHistory] = useState([]);
   const navigate = useNavigate();
   const canvasContainerRef = useRef(null);
   const [faceDetectActive, setFaceDetectActive] = useState(true);
@@ -29,7 +32,6 @@ const FaceAPIDetect = () => {
   }, [videoRef, faceDetectActive]);
 
   const startVideo = () => {
-    console.log("startVideo");
     navigator.mediaDevices
       .getUserMedia({ video: {} })
       .then((stream) => {
@@ -43,15 +45,17 @@ const FaceAPIDetect = () => {
   const handlePlay = () => {
     if (!faceDetectActive) return;
 
-    console.log("handlePlay");
     if (videoRef.current) {
-      console.log("handlePlay2");
       const video = videoRef.current;
 
       const canvas = faceapi.createCanvasFromMedia(video);
       canvasContainerRef.current.append(canvas);
       const displaySize = { width: video.width, height: video.height };
       faceapi.matchDimensions(canvas, displaySize);
+
+      const captureDuration = 3000; // Capture duration in milliseconds
+      let startTime = new Date().getTime(); // Capture start time
+      let currentWindowStartTime = startTime; // Track the start time of the current window
 
       const interval = setInterval(async () => {
         const detections = await faceapi
@@ -60,20 +64,51 @@ const FaceAPIDetect = () => {
           .withFaceExpressions()
           .withAgeAndGender();
 
-        setDescriptionUser({
-          age: Math.floor(detections[0].age),
-          gender: detections[0].gender,
-        });
+        if (detections && detections.length > 0) {
+          const currentAge = Math.floor(detections[0].age);
+          const currentGender = detections[0].gender;
 
-        console.log("detections : ", detections);
-        const resizedDetections = faceapi.resizeResults(
-          detections,
-          displaySize
-        );
-        canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
-        faceapi.draw.drawDetections(canvas, resizedDetections);
-        faceapi.draw.drawFaceLandmarks(canvas, resizedDetections);
-        faceapi.draw.drawFaceExpressions(canvas, resizedDetections);
+          setAgeHistory((prevAgeHistory) => [...prevAgeHistory, currentAge]);
+
+          const currentTime = new Date().getTime();
+
+          // Check if 3 seconds have passed since the start of the current window
+          if (currentTime - currentWindowStartTime >= captureDuration) {
+            const averageAge =
+              ageHistory.length > 0
+                ? ageHistory.reduce((sum, age) => sum + age, 0) /
+                  ageHistory.length
+                : currentAge;
+
+            setDescriptionUser({
+              age: averageAge,
+              gender: currentGender,
+            });
+
+            // Reset ageHistory and start a new 3-second window
+            setAgeHistory([]);
+            currentWindowStartTime = currentTime;
+          }
+
+          const resizedDetections = faceapi.resizeResults(
+            detections,
+            displaySize
+          );
+          canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+          faceapi.draw.drawDetections(canvas, resizedDetections);
+          faceapi.draw.drawFaceLandmarks(canvas, resizedDetections);
+          faceapi.draw.drawFaceExpressions(canvas, resizedDetections);
+        } else {
+          // Handle the case when no face is detected
+          setDescriptionUser({
+            age: 0,
+            gender: "",
+          });
+
+          // Reset ageHistory and start a new 3-second window
+          setAgeHistory([]);
+          currentWindowStartTime = new Date().getTime();
+        }
       }, 100);
 
       setIntervalState(interval);
@@ -81,21 +116,25 @@ const FaceAPIDetect = () => {
   };
 
   return (
-    <div>
-      <div className="user-description">
-        <p>age : {descriptionUser?.age}</p>
-        <p>gender : {descriptionUser?.gender}</p>
+    <>
+      <div className="age-test">
+        <h1>Venez testez votre age !</h1>
+        <h2>(Mettez vous seul devant la caméra et attendez ✨) </h2>
+        <h3>Age : {descriptionUser?.age}</h3>
+        <h3>Gender : {descriptionUser?.gender}</h3>
       </div>
-      {<div className="canvas-container" ref={canvasContainerRef}></div>}
-      <video
-        ref={videoRef}
-        width="720"
-        height="560"
-        autoPlay
-        muted
-        onPlay={handlePlay}
-      ></video>
-    </div>
+      <div className="video">
+        {<div className="canvas-container" ref={canvasContainerRef}></div>}
+        <video
+          ref={videoRef}
+          width="720"
+          height="560"
+          autoPlay
+          muted
+          onPlay={handlePlay}
+        ></video>
+      </div>
+    </>
   );
 };
 
